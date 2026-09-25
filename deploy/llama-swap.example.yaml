@@ -1,0 +1,12 @@
+# Example llama-swap entry (adjust the repo path). Keep it exclusive with other large models (e.g. a matrix "alone" set).
+models:
+  qwen3.8-flash-next-optimized:
+    name: Qwen3.8 Flash Next NVFP4 optimized (E46)
+    description: Original Mia-AiLab NVFP4 checkpoint + E46 decode stack
+    cmd: /path/to/Qwen3.8-Flash-Next-Single-DGX-Spark-Optimized/deploy/llama-swap-start.sh ${PORT}
+    cmdStop: /path/to/Qwen3.8-Flash-Next-Single-DGX-Spark-Optimized/deploy/llama-swap-stop.sh
+    checkEndpoint: /health
+    ttl: 3600
+    unloadTimeout: 60
+    env:
+      - Q38_SERVED_NAME=qwen3.8-flash-next-optimized

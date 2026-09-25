@@ -1,6 +1,6 @@
 # Research log (curated)
 
-This log is a curated history of the work that produced the E42 stack. It includes the dead ends, because those are often the useful part. It is condensed from the full working notes: about 1,400 lines of per-experiment records and a status file, kept outside this repository.
+This log is a curated history of the work that produced the E42 stack and the later E44–E46 stack (Phases 10–11). It includes the dead ends, because those are often the useful part. It is condensed from the full working notes: about 1,400 lines of per-experiment records and a status file, kept outside this repository.
 
 Unless stated otherwise, all numbers are:
 
@@ -147,6 +147,41 @@ Chat clients sample (the generation config is T1.0 / top-p 0.95 / top-k 20), and
   - A synthetic test built from vLLM's own kernels measured per-slot TV of 0.012–0.037. With independent keys the TV fell to within noise.
 - **E43, the fix.** Draft keys are offset into a disjoint range. Speed-neutral: +0.9% ± 1.0 and +0.4% ± 0.4.
 - *Lesson: "any q is exact" also requires independent resample noise. Check the sampler's RNG keying, not only the q it caches. Rescore tests are weak detectors, so test the kernels synthetically.*
+
+## Phase 10 — Prefix cache, decode MoE kernel, sampled head (E44–E46, S6FX)
+
+- **E44.** Keep the trailing prefix-cache block (a MiaAI-Lab PR #71 backport of vllm#53388). This affects TTFT only: the
+  warm second turn went from 1.24 → 0.68 s.
+- **E45 / QF1.** SSHdotCodes' dp4a W4A4 decode MoE for 1–8-row graphs. Routed MoE bandwidth went from ≈203 → 231–245 GB/s,
+  and PROSE3 greedy improved +4.0%.
+- **E46 / HX2.** The sampled-request target head is stored losslessly (exponent-coded BF16) and read by a Triton GEMV.
+  Sampled ms/step improved by ≈−3%. This is **high-fidelity, not bit-exact**: 99.98% of logits are bitwise equal and the
+  rest are within 1 ulp.
+- **S6H → S6FX (opt-in only).** INT4 top-1024 shortlist plus HX2-row refine: +3.9% sampled, with 0 true candidate misses
+  on 4,098 hard rows and TV ≤1e-3. It is not the default (see DECISIONS.md D-S6).
+- **Closed on E46.**
+  - MTP2: −2 to −4.5%.
+  - Draft W6: −0.1 ms.
+  - PLE W8: ≈0.15 ms, and not exact.
+  - Low-rank draft head: park.
+  - HC W6, cuBLAS sub-GEMM refine, INT2→INT4 coarse, and depth stopping (needs a GPU-side variable-width verify).
+
+## Phase 11 — Final screens before pause (R44–R59)
+
+- **Known-mechanism sweep.** No single remaining idea was worth ≥0.5 ms/step.
+- **W5 dense projections.** At the cold-DRAM level they are no faster than W6: 59.7 vs 61.0 µs, ≈0.06 ms/step in total.
+  Closed.
+- **Fused draft sampler / head tail.** The ceiling is ≈0.35 ms (<1%). Parked.
+- **IndexShare (SGLang).** Already present in this build.
+- **Host sync ("launch-first").** A blocking CPU→GPU `.to()` in the short-conv metadata builder, followed by the PLE
+  input D2H event sync, keeps the host in lock-step with the GPU. Making the copy non-blocking and publishing the PLE
+  request after the graph launch is byte-exact (0 row mismatches in 161 steps) and saved ≈0.35 ms/step (≈0.8%) on the
+  deterministic prompts. **Parked:** it is below the 1% bar, and one wrapper combination hung.
+- **Remaining ideas, if resumed:**
+  - a GPU-side variable-width verify, which would enable adaptive draft depth;
+  - diagnosing and landing launch-first;
+  - a combined head-tail/sampler fusion.
+  - Each looks ≤1–2% on its own.
 
 ## Incidents and process lessons
 

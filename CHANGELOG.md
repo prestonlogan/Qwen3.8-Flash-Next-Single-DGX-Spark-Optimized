@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.0.0 — 2026-09-25 — public release, E46 frozen (project paused)
+
+- **Stable default: E46** (unchanged from v0.5.0/v0.6.x; QF1 + HX2 on the E44 base). S6FX stays opt-in (`Q38_S6=1`).
+- The server now binds **127.0.0.1 by default** (`Q38_HOST` to override), because the dev-mode RPC endpoint can execute
+  code.
+- The README has been reworked for public use:
+  - current E46 direct numbers, separated from historical rows;
+  - endpoint usage, sampling defaults, optional features and how to disable them, fair benchmarking and recovery;
+  - new `docs/PORTING_PLAYBOOK.md`.
+- New direct E46 measurements (short final check, 400 tokens):
+  - code greedy 81.6 and JSON greedy 84.7 tok/s;
+  - code T1.0 74.8 and JSON T1.0 71.2 tok/s.
+- Clean-copy validation of the full E46 path (fresh `git archive` copy, existing model cache): prepare, adapter hash reproduced, qf build, launch, install, all gates pass, PROSE2 56.57 greedy / 52.16 T1.0 tok/s. See RESULTS.md.
+- The last research round (R59: host-sync removal "launch-first", W5 projections, fused draft sampler) is closed or
+  parked below the 1% bar. See RESEARCH_LOG.md.
+
 ## v0.6.0 — 2026-09-25 — optional S6H sampled fast head (opt-in, default OFF)
 - `Q38_S6=1` (requires HX): for plain sampled batches with T∈[0.7,1.0], top_k=20, top_p=0.95 (no min_p, penalties, bias, logprobs, grammar or thinking budget), the target head scores with INT4-g32. Only the top-1024 union rows are then refined with the E46 HX kernel. Outside that gate, the E46 head is used.
 - Fidelity (high-fidelity, **not exact**):

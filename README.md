@@ -6,10 +6,27 @@
 > from MiaAI Lab's work (upstream commit `d038090`). This repository adds a decode-speed optimization stack on top of it.
 > See [Credits](#credits).
 
-This repository serves `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4` on a **single NVIDIA DGX Spark** (GB10, SM121, 128 GB
-unified memory) with vLLM, and then hot-installs a stack of decode optimizations into the running server. The stack
-was developed and measured one experiment at a time; every retained item is either output-exact, distribution-exact
-(rejection sampling), or a quality-gated numeric change. The current promoted configuration is **E45** (= E44 plus a faster NVFP4 decode MoE kernel adapted from SSHdotCodes' Apache-2.0 qwenfast kernels; E44 = E42, plus E43's exactness fix for sampled drafting, plus E44's prefix-cache block retention for faster warm turns, a backport from MiaAI-Lab PR #71).
+This repository serves the **original** `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4` checkpoint on a **single NVIDIA DGX Spark**
+(GB10, SM121, 128 GB unified memory) with vLLM, then hot-installs a stack of decode optimizations into the running server.
+It is **not** the 5-expert INT4 "FAST" variant or any other smaller or pruned model: every routed expert, the full top-k
+routing and the full vocabulary are kept. The checkpoint weights are untouched. The only learned change is a small LoRA
+on the MTP *drafter*, and the drafter affects speed only: speculative decoding verifies every token with the target.
+
+Every retained optimization falls into one of three correctness classes:
+
+- **output-exact**: bit-identical greedy output, or distribution-exact sampling via rejection sampling;
+- **high-fidelity**: weights stored losslessly, but logits not bit-identical (HX2);
+- **quality-gated numeric change**: W6/W8 dense projections, gated on perplexity and task checks.
+
+Each item says which class it belongs to in [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md). The current stable, default
+configuration is **E46**:
+
+- the E44 base (r32a drafter, fast heads, PLE zero-copy, the prefix-cache block-retention backport);
+- plus **QF1**, a faster NVFP4 decode MoE kernel adapted from SSHdotCodes' Apache-2.0 qwenfast kernels;
+- plus **HX2**, a high-fidelity compressed BF16 head for sampled requests.
+
+**Project status (2026-09-25): paused.** E46 is the frozen public recipe. The research log lists what was tried,
+including what did not work.
 
 | | |
 |---|---|
@@ -18,7 +35,8 @@ was developed and measured one experiment at a time; every retained item is eith
 | Image | `vllm/vllm-openai@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8` |
 | Engine | day-0 Qwen3.8 vLLM fork build `0.1.dev20073+g8e685d198`, FlashInfer 0.6.17, torch 2.13.0+cu130 |
 | Serving profile | TP=1, 262,144 context, FP8 KV cache, MTP speculative decoding (3 draft tokens), `max-num-seqs` 4 |
-| Promoted stack | **E46** (E45 + high-fidelity compressed head for sampled requests: weights stored losslessly, logits not bit-identical) — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
+| Stable stack (default) | **E46** (E45 + HX2 high-fidelity compressed head for sampled requests: weights stored losslessly, logits not bit-identical) — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
+| Optional (off by default) | **S6FX** sampled fast head (`Q38_S6=1`): high-fidelity, not exact — see below |
 
 ## Why this exists
 
@@ -29,26 +47,33 @@ recipe version we started from (see section B1 of [docs/OPTIMIZATIONS.md](docs/O
 
 ## Headline results
 
-All numbers are decode tokens/s for one stream (S=1), 800 generated tokens, thinking off, `ignore_eos`, on one DGX Spark.
+All numbers are decode tokens/s (not prefill/TTFT) for one stream (S=1) unless stated, 400–800 generated tokens, thinking off, `ignore_eos`, on one DGX Spark.
 "Ordinary prose" means unpredictable natural-language prose prompts (stories, essays, letters, explainers) and is the
 hard case for speculative decoding. Each number is labelled with how it was measured; see
 [docs/RESULTS.md](docs/RESULTS.md) for the full tables and [docs/BENCHMARKING.md](docs/BENCHMARKING.md) for the method.
 
 | Workload | Sampling | Result | Measurement type |
 |---|---|---|---|
+| **Ordinary prose — PROSE2 (12 prompts), E46** | greedy | **56.83 tok/s** (42.22 ms/step, 2.405 tok/step) | **current stable stack, direct** (fresh boot, 400 tokens, R36 control arm) |
+| **Ordinary prose — PROSE2, E46** | default chat T1.0 / top-p 0.95 / top-k 20 | **52.02 tok/s** (45.52 ms/step, 2.373 tok/step) | current stable stack, direct (same run) |
+| Ordinary prose — PROSE3 (8 fresh prompts), E46 | greedy | 54.67 tok/s (42.12 ms/step, 2.306 tok/step) | current stable stack, direct (same run) |
+| Code (2 prompts) / JSON (1 prompt), E46 | greedy | 81.6 / 84.7 tok/s (3.47 / 3.71 tok/step) | current stable stack, direct, n=4 / n=2, 400 tokens (final check) |
+| Code / JSON, E46 | default chat T1.0 | 74.8 / 71.2 tok/s | current stable stack, direct, n=4 / n=2 (final check) |
+| Two long conversations (150k + 150k context), E46 | greedy | ≈40.2 tok/s **per stream** (≈80.5 aggregate); min MemAvailable 13.3 GB | current stable stack, direct (warmed dual run) |
+| *Rows below are historical (earlier stacks) or baselines, kept for provenance.* | | | |
 | Ordinary prose, **baseline** (Mia recipe as deployed, E01) — PROSE ordinary-5 | greedy | **36.66 tok/s**, 59.5 ms/step, 2.18 tok/step | isolated baseline run |
 | Ordinary prose, **baseline** (E01) — PROSE ordinary-5 | T0.7 / top-k 20 | 34.85 tok/s | isolated baseline run |
 | Ordinary prose, E38 stack (before drafter adapter) — same PROSE ordinary-5 set | greedy | 51.2–51.7 tok/s (**≈+40% vs E01**), ≈44.6 ms/step | pooled alternating A/B arms |
 | Ordinary prose, promoted drafter (E40) — PROSE, 6 prompts | greedy | 53.65 → **55.59 tok/s** (+3.6%) | direct matched A/B (same process), historical |
-| Ordinary prose — **PROSE ordinary-5** (same prompts as E01) | greedy | **53.23 tok/s** (2.387 tok/step, 44.80 ms/step), n=10 → **+45.2% vs E01** | current stack, direct (CK42) |
-| Ordinary prose — PROSE2 (12 prompts, dev set) | greedy | base drafter 51.19 → **current 53.73 tok/s** (2.399 tok/step, 44.61 ms/step), +4.99% ± 0.61, 12/12 | direct matched A/B, current stack (CK42) |
+| Ordinary prose — **PROSE ordinary-5** (same prompts as E01) | greedy | **53.23 tok/s** (2.387 tok/step, 44.80 ms/step), n=10 → **+45.2% vs E01** | E42 stack, direct (CK42), historical — E45/E46 add ≈+4% greedy on PROSE3 in matched A/B |
+| Ordinary prose — PROSE2 (12 prompts, dev set) | greedy | E42 stack: base drafter 51.19 → **r32a 53.73 tok/s** (2.399 tok/step, 44.61 ms/step), +4.99% ± 0.61, 12/12 | direct matched A/B, E42 stack (CK42), historical |
 | Ordinary prose — PROSE2 | **default chat** T1.0 / top-p 0.95 / top-k 20, thinking off | E40 state 43.69 → **E42 48.57 tok/s** (2.387 tok/step, 49.11 ms/step), +11.2% ± 1.2, 12/12 | direct matched A/B (CK42) |
 | Ordinary prose — PROSE3 (fresh confirmation set) | default chat T1.0 / p0.95 / k20 | E40 state 42.48 → **E42 47.83 tok/s**, +12.7% ± 1.1, 8/8 | direct matched A/B (CK42) |
 | Same, E43 (exactness fix) vs E42 | default chat | PROSE2 48.39 → 48.86 (+0.9% ± 1.0); PROSE3 47.60 → 47.77 (+0.4% ± 0.4): speed-neutral | direct matched A/B (CK1) |
-| Code (2 prompts) / JSON (1 prompt) | greedy | 78.00 / 79.21 tok/s (n=4 / n=2) | current stack, direct (CK42) |
-| Code / JSON | default chat T1.0 | 68.34 / 71.22 tok/s (n=4 / n=2) | current stack, direct (CK42) |
-| Ordinary prose, 2 concurrent streams (S=2) | greedy / T1.0 | 78.68 / 72.78 tok/s aggregate (41.9 / 38.9 per stream) | current stack, direct (CK42) |
-| 150k-token context decode | greedy / T1.0 | 46.8–50.9 / 47.0–47.6 tok/s | current stack, direct (CK42, 2 runs each) |
+| Code (2 prompts) / JSON (1 prompt) | greedy | 78.00 / 79.21 tok/s (n=4 / n=2) | E42 stack, direct (CK42), historical |
+| Code / JSON | default chat T1.0 | 68.34 / 71.22 tok/s (n=4 / n=2) | E42 stack, direct (CK42), historical |
+| Ordinary prose, 2 concurrent streams (S=2) | greedy / T1.0 | 78.68 / 72.78 tok/s aggregate (41.9 / 38.9 per stream) | E42 stack, direct (CK42), historical |
+| 150k-token context decode | greedy / T1.0 | 46.8–50.9 / 47.0–47.6 tok/s | E42 stack, direct (CK42, 2 runs each), historical |
 | **Warm multi-turn TTFT** (responsiveness, not decode), ~8.4k-token conversation | greedy | second turn 1.24 → **0.68 s**; after a ~3k-word tool result 3.51 → **2.65 s**; cold first turn unchanged (5.2 s) | direct matched A/B, E43 vs E44 (6 paired sessions) |
 | **E46 vs E45** (compressed high-fidelity head) | default chat T1.0 | ms/step −1.42 ± 0.22 (PROSE2, 12/12), −1.58 ± 0.37 (PROSE3, 8/8) ≈ −3%; greedy unchanged; not bit-identical: 99.98% of logits bitwise-equal, argmax equal, TV ≤ 2.4e-6 (accumulation order) | direct matched A/B, same process (HX2) |
 | **E45 vs E44** (NVFP4 decode MoE kernel) | greedy / default chat T1.0 | PROSE3 greedy 53.08 → **55.17** (+4.0% ± 0.6, 8/8); PROSE3 T1.0 48.21 → **49.50** (+2.8% ± 1.3); PROSE2 T1.0 49.01 → **50.72** (+3.6% ± 1.0); 150k greedy ≈+6–8% preliminary (n=2 per arm, cold/warm imbalance); tok/step unchanged | direct matched A/B, same process (QF1/QF3) |
@@ -103,7 +128,7 @@ the optimization install afterwards takes ~10–20 s.
 | `scripts/prepare.sh` | One-time host prep, no download: builds the packed PLE table (~27 GiB, CPU-only, Mia's builder), compiles the one-line ARM barrier helper `overlays/runtime/exp_dmb.c`, and builds the drafter patch. |
 | `scripts/build_adapter.sh` | Merges the committed r32a LoRA (14.6 MB) into the checkpoint's BF16 MTP tensors → `adapters/r32a/mtp_patch_r32a.safetensors` (175 MB), network-less and CPU-only, and verifies SHA-256 `bd3c1807…` (bit-identical to the patch used for all measurements). |
 | `start.sh` → `scripts/serve.sh` | Launch the container with the boot-time overlays, wait for health, then run `scripts/install_stack.sh`. |
-| `scripts/install_stack.sh` | Hot-install the promoted E43 stack into a running server (see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md)). |
+| `scripts/install_stack.sh` | Hot-install the stable E46 stack into a running server (see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md)). |
 | `stop.sh` → `scripts/stop.sh` | Stop the watchdog and the container. |
 
 ## Configuration
@@ -133,6 +158,61 @@ Fixed launch settings (in `scripts/serve.sh`): FP8 KV cache, BF16 Mamba/GDN stat
 2,048 batched tokens, `--speculative-config {"method":"mtp","num_speculative_tokens":3,"use_local_argmax_reduction":true}`,
 CUDA graphs `FULL_DECODE_ONLY` at capture sizes 4/8/12/16, V2 model runner, `qwen3` reasoning parser, `qwen3_xml` tool
 parser with auto tool choice, and the chat template shipped in Mia's recipe.
+
+## Using the endpoint
+
+```bash
+curl -s http://127.0.0.1:5810/v1/chat/completions -H 'content-type: application/json' -d '{
+  "model": "qwen3.8-flash-next",
+  "messages": [{"role": "user", "content": "Write a haiku about unified memory."}],
+  "max_tokens": 200,
+  "chat_template_kwargs": {"enable_thinking": false}
+}'
+```
+
+- **Sampling defaults.** Requests that omit sampling parameters use the checkpoint's `generation_config`: default chat
+  T1.0, top-p 0.95, top-k 20. Speed tables label **greedy** (T=0) and **sampled** (default chat) separately. Sampled
+  decode is slower because the verify step must produce the full target distribution.
+- **Thinking.** It is on by default (`qwen3` reasoning parser). Pass `"chat_template_kwargs": {"enable_thinking": false}` to
+  turn it off. Tool calling uses the `qwen3_xml` parser with `tool_choice: auto`.
+- **Context and concurrency.** `max-model-len` is 262,144 and `max-num-seqs` is 4. The FP8 KV cache holds ≈1.1 M tokens,
+  so two 150k–250k conversations run concurrently. Speed was tuned for 1–2 streams.
+- **TTFT / prefix cache.** Automatic prefix caching is on. The E44 backport keeps the trailing cached block, so a warm
+  follow-up turn re-prefills only the new text. These are TTFT numbers, not decode.
+
+### Optional features and how to disable things
+
+| Env var (for `./run.sh` / `./start.sh`) | Default | Effect |
+|---|---|---|
+| `Q38_S6=1` | off | **S6FX** sampled fast head: an INT4 top-1024 shortlist, then HX2-row refine, with full-head fallback outside the validated gate. On sampled prose it measured **+3.9% tok/s** (−1.9 ms/step, 12/12 prompts). **Caveat:** high-fidelity, *not exact*. It had 0 true top-k/top-p misses on 4,098 hard replay rows, and its final-distribution TV ≤1e-3 vs full BF16 is the same as E46, but it is not certified for every input. Leave it off if you need E46 fidelity. |
+| `Q38_HX=0` | on | use the plain cuBLAS BF16 head for sampled requests (E45 behaviour, ≈3% slower sampled) |
+| `Q38_QF=0` | on | use FlashInfer CUTLASS for the decode MoE (E44 behaviour) |
+| `Q38_NO_ADAPTER=1` | off | serve the stock MTP drafter |
+| `Q38_NO_INSTALL=1` | off | launch the stock recipe profile without the runtime stack |
+| `Q38_BLOCK_DROP=1` | off | stock trailing prefix-cache block drop (disables the E44 backport) |
+| `Q38_HOST` | `127.0.0.1` | bind address. The dev-mode RPC endpoint executes code, so never bind it to an untrusted network. |
+
+### Benchmarking fairly and recovering
+
+- Use `bench/q38bench.py` (see [docs/BENCHMARKING.md](docs/BENCHMARKING.md)).
+  - Compare only the **same prompt set**, the **same sampling** and the **same token budget**.
+  - Report ms/step and tok/step as well as tok/s: tok/s swings by ±5% with acceptance on single prompts.
+  - Do not compare code/JSON/"anchor" numbers with ordinary prose.
+- **Recovery.**
+  - `./stop.sh` stops the container and the watchdog; then run `./run.sh` again.
+  - If the host runs low on memory, `scripts/memwatch.sh` stops the container on its own.
+  - Nothing outside the container, the repo's `.state/`, the HF cache and the PLE cache is written.
+
+### Running under llama-swap
+
+`deploy/llama-swap-start.sh <port>` is a llama-swap `cmd` adapter.
+
+- It starts vLLM on an internal port, installs E46, and only then opens `<port>`, so no request reaches a half-installed
+  server.
+- `deploy/llama-swap-stop.sh` is the matching `cmdStop`.
+- See `deploy/llama-swap.example.yaml`. The default served name is `qwen3.8-flash-next-optimized`.
+- Run `./run.sh` (or `scripts/prepare.sh`) once first to build the local artifacts.
+- The model needs ≈100 GiB, so make it exclusive with other large models (for example through a matrix "alone" set).
 
 ## Capabilities and validation status
 
@@ -177,7 +257,8 @@ Vision/video inputs (supported by the base recipe) were not evaluated by this wo
 | [docs/BENCHMARKING.md](docs/BENCHMARKING.md) | how to measure: metrics, suites, same-process A/B, pitfalls |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | the model, the Mia baseline path and the modified path; step anatomy |
 | [docs/RESEARCH_LOG.md](docs/RESEARCH_LOG.md) | curated history including rejected experiments and lessons |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | open decisions (e.g. D-S6) |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | decisions (e.g. D-S6) |
+| [docs/PORTING_PLAYBOOK.md](docs/PORTING_PLAYBOOK.md) | lessons classified as GB10-general, spec-decoding-general, Qwen3.8-specific, checkpoint-specific |
 | [CHANGELOG.md](CHANGELOG.md), [THIRD_PARTY.md](THIRD_PARTY.md) | release notes; licensing map |
 
 ## Credits

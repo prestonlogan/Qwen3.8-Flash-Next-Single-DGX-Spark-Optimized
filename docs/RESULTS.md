@@ -203,3 +203,17 @@ the matched warm rerun is the representative number. The memwatch floor is 6 GB;
 | Code | generated code executed against tests | pass |
 | Sampled distribution | mean target log-prob of sampled texts, rescored with the exact head (`bench/rescore.py`) | E41 on − off: T1.0 +0.054 ± 0.104 SE, T0.7 +0.018 ± 0.032 SE (noise) |
 | Exactness counters | in-server comparison of fast vs reference paths | target head: 0 argmax differences at C=512 on 3,792 sampled-context rows; draft head K=64: 0 non-tie flips; PLE: 0 row mismatches over 1,744 steps; top-k/top-p: 0 of 2,048 rows differ |
+
+
+## Final E46 checks (2026-09-25, before public release)
+
+| Check | Result | Type |
+|---|---|---|
+| Clean copy (`git archive` of the release commit into a fresh directory, existing read-only model cache) via `./run.sh` | prepare OK; r32a patch sha256 `bd3c1807…` reproduced; `qf_moe.so` built; launch plus E46 install `INSTALL_OK`; `/health` 200 | clean-copy functional |
+| Gates (`bench/gates.py`) on that clean copy | tool single ✔, tool multi-turn ✔, strict JSON ✔, schema JSON ✔, reasoning 4/4, code exec ✔ | clean-copy functional |
+| PROSE2 (12 prompts, 300 tokens) greedy on the clean copy | **56.57 tok/s**, 42.20 ms/step, 2.400 tok/step | direct, single pass |
+| PROSE2 default chat T1.0 / p0.95 / k20 (seed 11) on the clean copy | **52.16 tok/s**, 45.63 ms/step, 2.388 tok/step | direct, single pass |
+| Code (2 prompts ×2) / JSON (1 prompt ×2), 400 tokens, greedy | 81.6 / 84.7 tok/s (3.47 / 3.71 tok/step) | direct, research server running E46 |
+| Code / JSON, default chat T1.0 | 74.8 / 71.2 tok/s | direct, same |
+
+These match the fresh-boot E46 control run (PROSE2 greedy 56.83, T1.0 52.02 tok/s).
