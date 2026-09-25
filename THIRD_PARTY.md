@@ -19,3 +19,4 @@
 The Docker image `vllm/vllm-openai` (pinned by digest) and its contents are used as-is under their own licenses.
 
 - `overlays/block_drop/patch_block_drop.py` — copied unmodified from MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark `files/patch_block_drop.py` (PR #71, commit ffc41629c0a9aa9a390f18fecd6f1f19e7c3b024, author usmaneth), AGPL-3.0. It backports vllm-project/vllm#53388 (Apache-2.0).
+- `overlays/runtime/qf/qf_moe.cu` — from SSHdotCodes/qwen-3.8-flash-next-pro6000 `serve/qwenfast/qf_moe.cu` (commit 8e5be4440eeea37d31994b0845d1344201de7741, 2026-09-24; upstream sha256 158649bd31de55e6…), Apache-2.0 (`LICENSES/Apache-2.0-vLLM.txt` text applies). Modified by this project: the CUDA stream header was changed from `ATen/cuda/CUDAContext.h` to `c10/cuda/CUDAStream.h` (the image lacks cusparse.h), and `getCurrentCUDAStream` is now called from c10. `qf_bind_moe.cpp` and `build.py` are minimal bindings/builds written by this project and are Apache-2.0.

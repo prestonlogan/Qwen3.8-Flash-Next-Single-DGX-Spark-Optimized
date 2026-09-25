@@ -299,3 +299,11 @@ deliberately **not** enabled: the S6 fast target head for sampled requests (see 
   - decode unchanged.
 - **Class.** Output-exact in the same sense as the existing prefix cache: warm-vs-cold top-20 logprob divergence equals E43's own warm-vs-cold divergence.
 
+
+### 18. NVFP4 decode MoE kernel (E45) — from SSHdotCodes qwenfast, Apache-2.0
+- What: `overlays/runtime/exec_qfmoe_install.py` replaces the routed-expert `forward_modular` of all 48 target MoE layers when the batch has 1–8 rows (bf16, H=2560, top-10); otherwise the original FlashInfer CUTLASS path runs. The shared expert still runs through vLLM.
+- Kernel (`overlays/runtime/qf/qf_moe.cu`):
+  - gemm1: one CTA per (top-k position, 16 rows); positions that repeat an expert exit, so each expert is read once. FP4 dp4a block sums, SwiGLU, re-quantization.
+  - gemm2: one CTA per (expert, 128 rows) with a deterministic top-k-order reduce. Chained with PDL.
+- Why it is faster: CUTLASS grouped GEMM at M ≤ 4 wastes tile work and needs prep/finalize kernels, whereas this kernel streams the weights at ~245 GB/s.
+- Built by `scripts/prepare.sh` (≈25 s) into `overlays/runtime/qf/build/`.

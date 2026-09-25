@@ -9,7 +9,7 @@
 This repository serves `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4` on a **single NVIDIA DGX Spark** (GB10, SM121, 128 GB
 unified memory) with vLLM, and then hot-installs a stack of decode optimizations into the running server. The stack
 was developed and measured one experiment at a time; every retained item is either output-exact, distribution-exact
-(rejection sampling), or a quality-gated numeric change. The current promoted configuration is **E44** (= E42, plus E43's exactness fix for sampled drafting, plus E44's prefix-cache block retention for faster warm turns, a backport from MiaAI-Lab PR #71).
+(rejection sampling), or a quality-gated numeric change. The current promoted configuration is **E45** (= E44 plus a faster NVFP4 decode MoE kernel adapted from SSHdotCodes' Apache-2.0 qwenfast kernels; E44 = E42, plus E43's exactness fix for sampled drafting, plus E44's prefix-cache block retention for faster warm turns, a backport from MiaAI-Lab PR #71).
 
 | | |
 |---|---|
@@ -18,7 +18,7 @@ was developed and measured one experiment at a time; every retained item is eith
 | Image | `vllm/vllm-openai@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8` |
 | Engine | day-0 Qwen3.8 vLLM fork build `0.1.dev20073+g8e685d198`, FlashInfer 0.6.17, torch 2.13.0+cu130 |
 | Serving profile | TP=1, 262,144 context, FP8 KV cache, MTP speculative decoding (3 draft tokens), `max-num-seqs` 4 |
-| Promoted stack | **E44** — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
+| Promoted stack | **E45** — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
 
 ## Why this exists
 
@@ -50,6 +50,7 @@ hard case for speculative decoding. Each number is labelled with how it was meas
 | Ordinary prose, 2 concurrent streams (S=2) | greedy / T1.0 | 78.68 / 72.78 tok/s aggregate (41.9 / 38.9 per stream) | current stack, direct (CK42) |
 | 150k-token context decode | greedy / T1.0 | 46.8–50.9 / 47.0–47.6 tok/s | current stack, direct (CK42, 2 runs each) |
 | **Warm multi-turn TTFT** (responsiveness, not decode), ~8.4k-token conversation | greedy | second turn 1.24 → **0.68 s**; after a ~3k-word tool result 3.51 → **2.65 s**; cold first turn unchanged (5.2 s) | direct matched A/B, E43 vs E44 (6 paired sessions) |
+| **E45 vs E44** (NVFP4 decode MoE kernel) | greedy / default chat T1.0 | PROSE3 greedy 53.08 → **55.17** (+4.0% ± 0.6, 8/8); PROSE3 T1.0 48.21 → **49.50** (+2.8% ± 1.3); PROSE2 T1.0 49.01 → **50.72** (+3.6% ± 1.0); 150k greedy 49.0 → 53.0 (n=2); tok/step unchanged | direct matched A/B, same process (QF1/QF3) |
 | Clean-checkout smoke of E42 via `./run.sh` | PROSE2 greedy / PROSE3 T1.0 | 53.86 / 48.15 tok/s | clean-copy smoke, single pass, not an A/B |
 
 Notes that matter when reading the table:
@@ -85,7 +86,7 @@ for the checkpoint plus ~27 GiB for the packed PLE table; **≥104 GiB `MemAvail
 cp .env.sample .env          # optional; every variable has a default
 ./download.sh                # EXPLICIT ~100 GB download of the pinned checkpoint (asks to confirm; --yes to skip)
 ./run.sh --dry-run           # run every host check and print what would happen; builds and launches nothing
-./run.sh                     # checks → prepare (PLE table, drafter patch) → launch → install E44 stack → health
+./run.sh                     # checks → prepare (PLE table, drafter patch) → launch → install E45 stack → health
 ./stop.sh                    # stop the container and its memory watchdog (keeps a bounded log tail)
 ```
 

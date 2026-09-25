@@ -14,3 +14,4 @@ results/
 *.qdrep
 overlays/block_drop/orig/
 overlays/block_drop/out/
+overlays/runtime/qf/build/

@@ -28,4 +28,5 @@ echo on > $O/hc_red.txt;          run exec_hc_red.py            # E38 fused HC s
 echo "on 512" > $O/head_gate.txt; run exec_head_gate.py         # E39 fast target head only for all-greedy plain batches; exact head otherwise
 echo "on 20 0.9 0.9 indep" > $O/probdraft.txt; run exec_probdraft.py  # E41 probabilistic fast-head draft + E43 independent draft noise keys (exact)
 echo on > $O/topkp.txt;          run exec_topkp.py             # E42 small-batch top-k/top-p fast path (bit-identical to stock incl. tie order)
+if [[ "${Q38_QF:-1}" == 1 ]]; then echo on > $O/qfmoe.txt; run exec_qfmoe_install.py; fi  # E45 SSHdotCodes NVFP4 decode MoE for 1..8-row verify/draft target graphs (Q38_QF=0 -> CUTLASS)
 echo "INSTALL_OK"

@@ -42,3 +42,10 @@ else
     python3 patch_block_drop.py /w/orig /w/out'
   ok "generated block-drop backport (6 files)"
 fi
+QF=$REPO/overlays/runtime/qf
+if [[ -f $QF/build/qf_moe.so ]]; then ok "qf_moe.so present"
+elif [[ "${Q38_DRY_RUN:-0}" == 1 ]]; then info "DRY RUN: would build overlays/runtime/qf/build/qf_moe.so (SSHdotCodes NVFP4 decode MoE, sm_121a)"
+else
+  docker run --rm --network none --gpus all -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$QF:/qf" --entrypoint python3 "$IMAGE" /qf/build.py
+  ok "built qf_moe.so"
+fi
