@@ -51,11 +51,16 @@ if (( avail < 104 )); then
 fi
 
 mkdir -p $EXP/logs $EXP/cache/vllm
+# persistent JIT caches (Triton/CUDA), keyed by image digest; see docs/OPERATIONS.md "SSD hygiene"
+IMGKEY=$(docker image inspect "$IMAGE" --format '{{.Id}}' | cut -c8-19)
+JIT=$EXP/cache/jit/$IMGKEY; mkdir -p "$JIT/triton" "$JIT/nv"
 LOG=$EXP/logs/${TAG}-$(date +%Y%m%dT%H%M%S)
 echo "$TAG" > $EXP/logs/CURRENT_TAG
 
 # shellcheck disable=SC2086
 docker run -d --name $NAME \
+  --log-driver json-file --log-opt max-size=50m --log-opt max-file=3 \
+  -v $JIT/triton:/root/.triton -v $JIT/nv:/root/.nv \
   --label q38fn-opt=1 --label q38fn-opt.tag="$TAG" \
   --gpus all --network host --ipc host \
   --cap-add SYS_NICE --cap-add SYS_PTRACE --ulimit memlock=-1 --ulimit stack=67108864 \

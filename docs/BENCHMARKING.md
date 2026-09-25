@@ -94,3 +94,15 @@ bench/xjob.sh wait ab1 1800      # exit 124 on timeout (job left running), other
 - **Chained estimates are not measurements.** A→B and B→C A/Bs multiplied together are an estimate of A→C. Label them.
 - **Offline wins shrink when served.** Offline or teacher-forced gains under ≈5% have not survived served A/Bs. Gate engineering work on a ≥5% offline estimate.
 - **Cold prefix cache.** Two concurrent 150k-token prefills make a decode look 10× slower. Warm the caches or match conditions.
+
+## SSD hygiene (experiment-local; no host or Docker-daemon changes)
+
+- **Container log:** `serve.sh` passes `--log-driver json-file --log-opt max-size=50m --log-opt max-file=3` for this container only, so at most ≈150 MB. `serve.sh` also saves a copy of the log to `.state/logs/<tag>-*-container.log` at startup.
+- **JIT caches:** Triton (`/root/.triton`) and CUDA (`/root/.nv`) are bind-mounted from `.state/cache/jit/<image-digest-12>/{triton,nv}`. That's about 0.3 GB, reused across relaunches instead of being rewritten each launch.
+  - Keying by image digest isolates toolkit and compiler changes. Triton and CUDA also hash kernel source and options internally, so edited kernels recompile.
+  - These caches are never shared with production.
+- **Short-lived large data** (hidden-state captures, training tensors) goes to `/dev/shm` only while free RAM allows. Delete it when done.
+- **Safe cleanup** (experiment-owned only):
+  - Stop the server first, then run `rm -rf .state/cache/jit/<old-digest>` for digests of images no longer used.
+  - Old `.state/logs/*` can be deleted freely.
+  - Never delete the Hugging Face cache, the packed PLE table, or other Docker objects.
