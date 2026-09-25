@@ -309,5 +309,7 @@ deliberately **not** enabled: the S6 fast target head for sampled requests (see 
 - Built by `scripts/prepare.sh` (≈25 s) into `overlays/runtime/qf/build/`.
 
 
-## 19. E46 — lossless exponent-coded exact head (sampled path)
+## 19. E46 — exponent-coded high-fidelity head (sampled path; lossless weight storage, not bit-identical logits)
 The exact BF16 lm_head (248320×2560) is used for every non-greedy request. BF16 exponents in this head have ≈2.6 bits of entropy, so each weight is stored as a sign+mantissa byte plus a 4-bit offset from its 64-group's maximum exponent. Offsets ≥15 (0.01%) are escapes: they are zeroed in the dense code and added back from a sparse fp32 list. A Triton GEMV (BN=32, BK=256) reconstructs the exact bf16 bits in registers and uses `tl.dot` with fp32 accumulation. Bytes read: 1.27 → 0.96 GB per sampled step; served ms/step ≈ −1.5 (−3%). Files: `overlays/runtime/exp_hx.py`, `exec_hx.py`, `exec_free.py`.
+
+Fidelity statement: the stored weights decode bit-exactly, but the GEMV sums in a different order than cuBLAS. Output logits are therefore not bit-identical. On the check set 99.98% of logits are bitwise-equal and the rest differ by ≤1 bf16 ulp; the argmax is equal and TV ≤ 2.4e-6 at T1.0. Treat E46 as a very small numerical change, not an exact one.

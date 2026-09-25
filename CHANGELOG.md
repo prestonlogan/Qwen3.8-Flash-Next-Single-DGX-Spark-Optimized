@@ -1,8 +1,8 @@
 # Changelog
 
-## v0.5.0 — 2026-09-25 — E46 (sampled decode: lossless compressed exact head)
+## v0.5.0 — 2026-09-25 — E46 (sampled decode: high-fidelity compressed head)
 
-- **Exact target head for sampled requests** (default chat T1.0 / p.95; greedy already uses the E39 fast head).
+- **High-fidelity target head for sampled requests** (default chat T1.0 / p.95; greedy already uses the E39 fast head).
   - The BF16 lm_head is stored losslessly: a sign+mantissa byte, a 4-bit exponent offset from the per-64 group maximum, and a sparse fp32 add-back for the 0.01% escapes. That is 0.96 GB instead of 1.27 GB; weights reconstruct bit-exactly.
   - A Triton GEMV reads the compressed form: 5.47 → 4.04 ms at M=4.
   - Logits: 99.98% bitwise-equal to cuBLAS, the rest within 1 bf16 ulp (accumulation order only); TV ≤ 2.4e-6 at T1.0.

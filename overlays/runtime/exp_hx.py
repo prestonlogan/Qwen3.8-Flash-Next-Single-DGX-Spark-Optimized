@@ -1,5 +1,5 @@
 """HX: lossless exponent-coded BF16 head. Per weight: byte sign|mantissa7, nibble offset from per-64 group max exponent
-(0..14; 15 = escape -> weight coded as 0 and added back by a sparse fp32 correction). Weights reconstruct bit-exactly."""
+(0..14; 15 = escape -> weight coded as 0 and added back by a sparse fp32 correction). Weights reconstruct bit-exactly; logits are NOT bit-identical to cuBLAS (accumulation order; 99.98% equal, TV<=2.4e-6)."""
 import torch, triton, triton.language as tl
 G = 64
 @triton.jit

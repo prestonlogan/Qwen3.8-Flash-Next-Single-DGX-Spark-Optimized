@@ -18,7 +18,7 @@ was developed and measured one experiment at a time; every retained item is eith
 | Image | `vllm/vllm-openai@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8` |
 | Engine | day-0 Qwen3.8 vLLM fork build `0.1.dev20073+g8e685d198`, FlashInfer 0.6.17, torch 2.13.0+cu130 |
 | Serving profile | TP=1, 262,144 context, FP8 KV cache, MTP speculative decoding (3 draft tokens), `max-num-seqs` 4 |
-| Promoted stack | **E46** (E45 + lossless compressed exact head for sampled requests) — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
+| Promoted stack | **E46** (E45 + high-fidelity compressed head for sampled requests: weights stored losslessly, logits not bit-identical) — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
 
 ## Why this exists
 
@@ -50,7 +50,7 @@ hard case for speculative decoding. Each number is labelled with how it was meas
 | Ordinary prose, 2 concurrent streams (S=2) | greedy / T1.0 | 78.68 / 72.78 tok/s aggregate (41.9 / 38.9 per stream) | current stack, direct (CK42) |
 | 150k-token context decode | greedy / T1.0 | 46.8–50.9 / 47.0–47.6 tok/s | current stack, direct (CK42, 2 runs each) |
 | **Warm multi-turn TTFT** (responsiveness, not decode), ~8.4k-token conversation | greedy | second turn 1.24 → **0.68 s**; after a ~3k-word tool result 3.51 → **2.65 s**; cold first turn unchanged (5.2 s) | direct matched A/B, E43 vs E44 (6 paired sessions) |
-| **E46 vs E45** (compressed exact head) | default chat T1.0 | ms/step −1.42 ± 0.22 (PROSE2, 12/12), −1.58 ± 0.37 (PROSE3, 8/8) ≈ −3%; greedy unchanged; logits bit-exact except accumulation order (TV ≤ 2.4e-6) | direct matched A/B, same process (HX2) |
+| **E46 vs E45** (compressed high-fidelity head) | default chat T1.0 | ms/step −1.42 ± 0.22 (PROSE2, 12/12), −1.58 ± 0.37 (PROSE3, 8/8) ≈ −3%; greedy unchanged; not bit-identical: 99.98% of logits bitwise-equal, argmax equal, TV ≤ 2.4e-6 (accumulation order) | direct matched A/B, same process (HX2) |
 | **E45 vs E44** (NVFP4 decode MoE kernel) | greedy / default chat T1.0 | PROSE3 greedy 53.08 → **55.17** (+4.0% ± 0.6, 8/8); PROSE3 T1.0 48.21 → **49.50** (+2.8% ± 1.3); PROSE2 T1.0 49.01 → **50.72** (+3.6% ± 1.0); 150k greedy ≈+6–8% preliminary (n=2 per arm, cold/warm imbalance); tok/step unchanged | direct matched A/B, same process (QF1/QF3) |
 | Clean-checkout smoke of E42 via `./run.sh` | PROSE2 greedy / PROSE3 T1.0 | 53.86 / 48.15 tok/s | clean-copy smoke, single pass, not an A/B |
 
