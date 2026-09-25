@@ -258,6 +258,7 @@ objects created by earlier ones, so the order matters.
   - `indep` adds a constant key offset (0x5DEECE66) to the draft positions, so draft noise comes from a key range no verify row uses. Synthetic TV is then within sampling noise (≤0.006).
   - Served A/B on the E42 stack (CK1): speed-neutral, +0.9% ± 1.0 on PROSE2 and +0.4% ± 0.4 on PROSE3.
   - Rescored target log-prob: no significant difference from the greedy-draft reference. The coupled E42 arm was −0.031 ± 0.013 vs its reference in CK42.
+  - Current upstream vLLM contains the equivalent fix (`_DRAFT_NOISE_SALT` in `vllm/v1/worker/gpu/sample/gumbel.py`). E43 backports it to the pinned image.
 
 ### 16. Small-batch top-k/top-p fast path (E42 / U30a) — `exec_topkp.py`
 
