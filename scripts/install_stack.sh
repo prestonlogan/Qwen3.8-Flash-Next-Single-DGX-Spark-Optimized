@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Preston Logan. Part of Qwen3.8-Flash-Next-Single-DGX-Spark-Optimized (builds on MiaAI-Lab's recipe).
-# install_stack.sh — hot-install the promoted optimization stack (E42) into a running server started by serve.sh.
+# install_stack.sh — hot-install the promoted optimization stack (E43) into a running server started by serve.sh.
 # Each step runs one overlays/runtime/exec_*.py inside the vLLM worker via collective_rpc (VLLM_SERVER_DEV_MODE).
 # Control files (<name>.txt) are written next to the exec scripts; they are git-ignored runtime state.
 # Order matters (later steps assume earlier ones). Total ~10-20 s. See docs/OPTIMIZATIONS.md for each item.
@@ -26,6 +26,6 @@ echo on > $O/ba.txt;              run exec_ba_gemv.py           # E37 GDN in_pro
 echo on > $O/gate.txt;            run exec_gate_install.py      # E37 router gate Triton BF16 GEMV
 echo on > $O/hc_red.txt;          run exec_hc_red.py            # E38 fused HC split-K reduce+cast (bitwise identical)
 echo "on 512" > $O/head_gate.txt; run exec_head_gate.py         # E39 fast target head only for all-greedy plain batches; exact head otherwise
-echo "on 20 0.9 0.9" > $O/probdraft.txt; run exec_probdraft.py  # E41 probabilistic fast-head draft for sampled requests (exact)
+echo "on 20 0.9 0.9 indep" > $O/probdraft.txt; run exec_probdraft.py  # E41 probabilistic fast-head draft + E43 independent draft noise keys (exact)
 echo on > $O/topkp.txt;          run exec_topkp.py             # E42 small-batch top-k/top-p fast path (bit-identical to stock incl. tie order)
 echo "INSTALL_OK"

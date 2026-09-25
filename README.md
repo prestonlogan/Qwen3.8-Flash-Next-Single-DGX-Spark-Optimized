@@ -9,7 +9,7 @@
 This repository serves `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4` on a **single NVIDIA DGX Spark** (GB10, SM121, 128 GB
 unified memory) with vLLM, and then hot-installs a stack of decode optimizations into the running server. The stack
 was developed and measured one experiment at a time; every retained item is either output-exact, distribution-exact
-(rejection sampling), or a quality-gated numeric change. The current promoted configuration is **E42**.
+(rejection sampling), or a quality-gated numeric change. The current promoted configuration is **E43** (= E42 plus an exactness fix for sampled drafting; see below).
 
 | | |
 |---|---|
@@ -18,7 +18,7 @@ was developed and measured one experiment at a time; every retained item is eith
 | Image | `vllm/vllm-openai@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8` |
 | Engine | day-0 Qwen3.8 vLLM fork build `0.1.dev20073+g8e685d198`, FlashInfer 0.6.17, torch 2.13.0+cu130 |
 | Serving profile | TP=1, 262,144 context, FP8 KV cache, MTP speculative decoding (3 draft tokens), `max-num-seqs` 4 |
-| Promoted stack | **E42** — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
+| Promoted stack | **E43** — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
 
 ## Why this exists
 
@@ -39,12 +39,16 @@ hard case for speculative decoding. Each number is labelled with how it was meas
 | Ordinary prose, **baseline** (Mia recipe as deployed, E01) — PROSE ordinary-5 | greedy | **36.66 tok/s**, 59.5 ms/step, 2.18 tok/step | isolated baseline run |
 | Ordinary prose, **baseline** (E01) — PROSE ordinary-5 | T0.7 / top-k 20 | 34.85 tok/s | isolated baseline run |
 | Ordinary prose, E38 stack (before drafter adapter) — same PROSE ordinary-5 set | greedy | 51.2–51.7 tok/s (**≈+40% vs E01**), ≈44.6 ms/step | pooled alternating A/B arms |
-| Ordinary prose, promoted drafter (E40) — PROSE, 6 prompts | greedy | 53.65 → **55.59 tok/s** (+3.6%) | direct matched A/B (same process) |
-| Ordinary prose — PROSE2 (12 prompts, dev/regression set) | greedy | **54.37 tok/s** | promoted confirmed (E41 process; greedy path unchanged by E41/E42) |
-| Ordinary prose — PROSE2 | **default chat sampling** T1.0 / top-p 0.95 / top-k 20 | E41: 48.25 (n=24) / 48.38 (n=12); **E42: 49.07 tok/s, 48.96 ms/step** | direct matched A/B (same process) |
-| Ordinary prose — PROSE3 (fresh confirmation set) | T0.7 / top-p 0.95 / top-k 20 | E41 → E42: 47.39 → **48.86 tok/s**; 49.73 → 48.82 ms/step | direct matched A/B (same process) |
-| Code (2 prompts) / JSON (1 prompt) | greedy | ≈76.9 / ≈80.4 tok/s | direct A/B arm (E40; greedy path unchanged since) |
-| Ordinary prose, 2 concurrent streams (S=2) | greedy | ≈78.8 tok/s aggregate | direct A/B arm (E40) |
+| Ordinary prose, promoted drafter (E40) — PROSE, 6 prompts | greedy | 53.65 → **55.59 tok/s** (+3.6%) | direct matched A/B (same process), historical |
+| Ordinary prose — **PROSE ordinary-5** (same prompts as E01) | greedy | **53.23 tok/s** (2.387 tok/step, 44.80 ms/step), n=10 → **+45.2% vs E01** | current stack, direct (CK42) |
+| Ordinary prose — PROSE2 (12 prompts, dev set) | greedy | base drafter 51.19 → **current 53.73 tok/s** (2.399 tok/step, 44.61 ms/step), +4.99% ± 0.61, 12/12 | direct matched A/B, current stack (CK42) |
+| Ordinary prose — PROSE2 | **default chat** T1.0 / top-p 0.95 / top-k 20, thinking off | E40 state 43.69 → **E42 48.57 tok/s** (2.387 tok/step, 49.11 ms/step), +11.2% ± 1.2, 12/12 | direct matched A/B (CK42) |
+| Ordinary prose — PROSE3 (fresh confirmation set) | default chat T1.0 / p0.95 / k20 | E40 state 42.48 → **E42 47.83 tok/s**, +12.7% ± 1.1, 8/8 | direct matched A/B (CK42) |
+| Same, E43 (exactness fix) vs E42 | default chat | PROSE2 48.39 → 48.86 (+0.9% ± 1.0); PROSE3 47.60 → 47.77 (+0.4% ± 0.4): speed-neutral | direct matched A/B (CK1) |
+| Code (2 prompts) / JSON (1 prompt) | greedy | 78.00 / 79.21 tok/s (n=4 / n=2) | current stack, direct (CK42) |
+| Code / JSON | default chat T1.0 | 68.34 / 71.22 tok/s (n=4 / n=2) | current stack, direct (CK42) |
+| Ordinary prose, 2 concurrent streams (S=2) | greedy / T1.0 | 78.68 / 72.78 tok/s aggregate (41.9 / 38.9 per stream) | current stack, direct (CK42) |
+| 150k-token context decode | greedy / T1.0 | 46.8–50.9 / 47.0–47.6 tok/s | current stack, direct (CK42, 2 runs each) |
 | Clean-checkout smoke of E42 via `./run.sh` | PROSE2 greedy / PROSE3 T1.0 | 53.86 / 48.15 tok/s | clean-copy smoke, single pass, not an A/B |
 
 Notes that matter when reading the table:
@@ -80,7 +84,7 @@ for the checkpoint plus ~27 GiB for the packed PLE table; **≥104 GiB `MemAvail
 cp .env.sample .env          # optional; every variable has a default
 ./download.sh                # EXPLICIT ~100 GB download of the pinned checkpoint (asks to confirm; --yes to skip)
 ./run.sh --dry-run           # run every host check and print what would happen; builds and launches nothing
-./run.sh                     # checks → prepare (PLE table, drafter patch) → launch → install E42 stack → health
+./run.sh                     # checks → prepare (PLE table, drafter patch) → launch → install E43 stack → health
 ./stop.sh                    # stop the container and its memory watchdog (keeps a bounded log tail)
 ```
 
@@ -96,7 +100,7 @@ the optimization install afterwards takes ~10–20 s.
 | `scripts/prepare.sh` | One-time host prep, no download: builds the packed PLE table (~27 GiB, CPU-only, Mia's builder), compiles the one-line ARM barrier helper `overlays/runtime/exp_dmb.c`, and builds the drafter patch. |
 | `scripts/build_adapter.sh` | Merges the committed r32a LoRA (14.6 MB) into the checkpoint's BF16 MTP tensors → `adapters/r32a/mtp_patch_r32a.safetensors` (175 MB), network-less and CPU-only, and verifies SHA-256 `bd3c1807…` (bit-identical to the patch used for all measurements). |
 | `start.sh` → `scripts/serve.sh` | Launch the container with the boot-time overlays, wait for health, then run `scripts/install_stack.sh`. |
-| `scripts/install_stack.sh` | Hot-install the promoted E42 stack into a running server (see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md)). |
+| `scripts/install_stack.sh` | Hot-install the promoted E43 stack into a running server (see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md)). |
 | `stop.sh` → `scripts/stop.sh` | Stop the watchdog and the container. |
 
 ## Configuration
@@ -131,16 +135,17 @@ parser with auto tool choice, and the chat template shipped in Mia's recipe.
 
 | Capability | Status | Evidence |
 |---|---|---|
-| Tool calling (single, multi-argument + follow-up turn) | pass | `bench/gates.py`, re-run at every milestone incl. E41 with all items on, and on a clean checkout of this repository running E42 |
+| Tool calling (single, multi-argument + follow-up turn) | pass | `bench/gates.py` on the full E42 stack (CK42) and on a clean checkout (E42). E43 changes only the sampled draft noise key, not greedy/tool paths |
 | Strict JSON and schema-guided JSON | pass | same gates |
 | Reasoning (thinking on, `qwen3` parser) | 4/4 pass | same gates |
 | Code generation + execution | pass | same gates |
-| Perplexity (7,601 human-written tokens) | 2.37–2.40 band (BF16 reference 2.383–2.400) | every numeric change; V39: 2.390 |
+| Perplexity (7,601 human-written tokens) | 2.3787 on the E42 stack (BF16 reference band 2.383–2.400) | CK42 |
+| Sampled-distribution correctness | E43 fixes a draft/verify noise coupling that biased E41/E42 sampled output (see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) §15). Synthetic kernel test: E43 within sampling noise. Served rescore: no significant difference from the greedy-draft reference | CK1 |
 | 262,144-token context | configured; needle correct at 108k and 201,650 prompt tokens (E22) | E22 |
-| Two concurrent long conversations | 144,047-token needle correct while a 150,053-token conversation decodes (≈48.8–50.3 tok/s) | V39, T8 check 3, S4 |
-| KV capacity | 1,115,942 tokens = 4.26× a 262k request (last recorded on the E36/E38 stack) | E36/E38 |
-| Two concurrent streams (S=2) | supported and benchmarked; E40 greedy prose aggregate ≈78.8 tok/s | T8 check 3 |
-| Long-context decode speed | flat from 1.5k to 150k context (greedy 52.7 tok/s at 150k) | L1 |
+| Two concurrent long conversations | 144,047-token needle correct while a 150,053-token conversation decodes at 52.4 tok/s; min MemAvailable 12.4 GB | CK42 (E42 stack) |
+| KV capacity | 1,115,942 tokens = 4.26× a 262k request | E42 launch log |
+| Two concurrent streams (S=2) | greedy 78.7 / T1.0 72.8 tok/s aggregate on ordinary prose | CK42 |
+| Long-context decode speed | 150k context: greedy 46.8–50.9, T1.0 47.0–47.6 tok/s; acceptance flat from 1.5k to 150k | CK42, L1 |
 
 Speed was optimized for S=1 and S=2. `max-num-seqs` is 4; higher concurrency was not a target and is not characterized.
 Vision/video inputs (supported by the base recipe) were not evaluated by this work.

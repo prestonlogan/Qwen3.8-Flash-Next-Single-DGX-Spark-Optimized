@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.0 — 2026-09-25 — E43
+
+- **Exactness fix for sampled requests.** The E41 probabilistic draft sampled its tokens with the Gumbel noise key that the pinned vLLM V2 rejection sampler later reuses for the residual resample of the same row. That coupling biases sampled outputs.
+  - The draft now uses a disjoint key range (`probdraft on 20 0.9 0.9 indep`).
+  - Speed-neutral: PROSE2 +0.9% ± 1.0, PROSE3 +0.4% ± 0.4.
+  - Greedy is unaffected.
+- **CK42 current-state benchmark**, all direct same-process measurements:
+  - PROSE ordinary-5 greedy: 53.23 tok/s, +45% vs E01.
+  - PROSE2 default chat: 48.57 tok/s vs 43.69 with E41/E42 off.
+  - PPL 2.3787, all gates pass, dual 144k/150k long context OK.
+
 ## v0.1.0 — 2026-09-25 (initial private release)
 
 Promoted configuration **E42**, built on the MiaAI-Lab single-DGX-Spark recipe (upstream commit `d038090`) and `Mia-AiLab/Qwen3.8-Flash-Next-NVFP4@925d7be6`.

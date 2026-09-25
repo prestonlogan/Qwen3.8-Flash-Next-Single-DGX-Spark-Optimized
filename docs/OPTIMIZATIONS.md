@@ -26,7 +26,7 @@ the final numbers; the per-item **ms/step** deltas are the robust quantity.
 | **bitwise identical** | same outputs bit for bit (checked on real layers) |
 | **output-exact (draft-only)** | changes only the drafter; the target verifies every token (greedy exact-match, or rejection sampling), so outputs cannot change except via the engine's normal numeric nondeterminism. Acceptance (speed) may change. |
 | **exact up to ties** | the result equals the reference except where two candidates have exactly equal values and a different one is picked |
-| **distribution-exact** | standard speculative (rejection) sampling with the draft distribution *q* that was actually sampled: the output distribution equals the target's for any *q* |
+| **distribution-exact** | standard speculative (rejection) sampling with the draft distribution *q* that was actually sampled and resample noise independent of the draft draw: the output distribution equals the target's for any *q* |
 | **quality-gated numeric change** | the target's arithmetic changes; accepted only because perplexity, top-1 agreement and functional gates stay inside the reference noise band |
 
 Background noise: greedy decoding on this engine is not bitwise reproducible between identical runs (batch/graph shape
@@ -115,7 +115,7 @@ objects created by earlier ones, so the order matters.
 | 12 | `ba`, `gate` on | Triton BF16 GEMV for GDN `in_proj_ba` and router gate (E37) | −0.36 ms/step | alternating | quality-gated (same precision) |
 | 13 | `hc_red` on | Fused HC split-K reduce + cast (E38) | −0.44 ms/step | alternating | bitwise identical |
 | 14 | `head_gate` "on 512" | Exactness gate for the fast target head (E39) | greedy unchanged; sampled uses exact head | gate counters | greedy: exact up to ties; everything else: exact |
-| 15 | `probdraft` "on 20 0.9 0.9" | **Probabilistic fast-head draft for sampled requests** (E41) | sampled PROSE2 T1.0: ≈+14.7% (chained); PROSE T0.7 +5.0% | alternating | distribution-exact |
+| 15 | `probdraft` "on 20 0.9 0.9 indep" | **Probabilistic fast-head draft for sampled requests** (E41) | sampled PROSE2 T1.0: ≈+14.7% (chained); PROSE T0.7 +5.0% | alternating | distribution-exact |
 | 16 | `topkp` on | **Small-batch top-k/top-p fast path** (E42/U30a) | sampled −0.91 to −0.96 ms/step | alternating | bit-identical incl. tie order |
 
 (Rows follow the command order in `install_stack.sh`; row 4 is two commands (`on`, then `freemx`) and row 12 is two consecutive commands (`ba`, `gate`).)
@@ -237,7 +237,7 @@ objects created by earlier ones, so the order matters.
   distribution whose true argmax fell outside the candidates); C=512 had 0 argmax differences, for +15 µs.
 - Effect: greedy speed unchanged; sampled requests pay ≈+5 ms/step for exactness (the full head). Gates pass.
 
-### 15. Probabilistic fast-head draft for sampled requests (E41) — `exec_probdraft.py` "on 20 0.9 0.9"
+### 15. Probabilistic fast-head draft for sampled requests (E41, exactness fix E43) — `exec_probdraft.py` "on 20 0.9 0.9 indep"
 
 - With a greedy (one-hot) draft, a sampled request accepts a draft token with probability p(argmax); a probabilistic
   draft is accepted with Σ min(p, q). The speculator's draft sampler is overridden to use the fast reduced-vocab draft head
@@ -248,8 +248,16 @@ objects created by earlier ones, so the order matters.
   the top-p/temperature shaping (S3), **≈+14.7% chained**. PROSE T0.7: +5.0% (6/6 prompts). S=2 T0.7 aggregate: +7.2%.
   150k-context decode: T0.7 +2.1%, T1.0 +4.9%. Code/JSON sampled: neutral. Greedy PROSE2: 54.37 → 54.37.
   Cost ≈0.2 ms/step.
-- **Class.** distribution-exact (standard speculative sampling with the cached *q*). Rescoring sampled texts under the
-  exact target head was within noise (T1.0: +0.054 ± 0.104 SE mean log-prob per token).
+- **Class.** distribution-exact **with the E43 `indep` key** (standard speculative sampling with the cached *q* and
+  independent resample noise). Without it (E41/E42 as first promoted) the sampler's draft/verify noise coupling biased
+  sampled output (see the E43 note below); the early rescore check (+0.054 ± 0.104) was too noisy to detect this.
+
+- **E43 exactness fix (`indep`).** In the pinned V2 runner, `Speculator.sample_draft` draws draft slot *j*'s Gumbel noise under the key (seed, p+*j*). The rejection sampler's residual resample for verify row *j*, whose position is p+*j*, uses the same key, block layout and noise vector.
+  - After a rejection, the resample therefore reuses the noise that selected the rejected draft token. Speculative sampling is exact only if the resample is independent of the draft draw.
+  - With the stock one-hot greedy draft this is harmless. With a probabilistic draft it biases the output: a synthetic test with vLLM's own kernels (`gumbel_sample` + `rejection_sample`, LLM-like top-20 distributions) gives per-slot TV of 0.012–0.037 against the target.
+  - `indep` adds a constant key offset (0x5DEECE66) to the draft positions, so draft noise comes from a key range no verify row uses. Synthetic TV is then within sampling noise (≤0.006).
+  - Served A/B on the E42 stack (CK1): speed-neutral, +0.9% ± 1.0 on PROSE2 and +0.4% ± 0.4 on PROSE3.
+  - Rescored target log-prob: no significant difference from the greedy-draft reference. The coupled E42 arm was −0.031 ± 0.013 vs its reference in CK42.
 
 ### 16. Small-batch top-k/top-p fast path (E42 / U30a) — `exec_topkp.py`
 

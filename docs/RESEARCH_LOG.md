@@ -138,6 +138,16 @@ Chat clients sample (the generation config is T1.0 / top-p 0.95 / top-k 20), and
   - Direct A/B: PROSE2 T1.0 −0.96 ms/step (12/12 prompts faster); fresh PROSE3 T0.7 −0.91 ms/step (8/8). Promoted as **E42**.
 - **H1/H2 (parked).** Low-rank coarse target head (<1% ceiling); lossless 12-bit BF16 head compression for the sampled path (≈1–2% realistic ceiling).
 
+## Phase 9 — Checkpoint and a sampler exactness bug (CK42, CK1) — E43
+
+- **CK42.** A single-process benchmark of the whole E42 stack. PROSE ordinary-5 greedy runs at 53.23 tok/s (E01: 36.66). Default-chat sampled PROSE2 goes from 43.69 to 48.57 tok/s against the E40 state. PPL, gates and dual long context all pass.
+- **The warning sign.** The sampled-text rescore gave −0.031 ± 0.013 (2.4σ). Earlier rescores had been negative but always within noise.
+- **CK1, the bug.** In the pinned V2 runner the drafter samples draft slot *j* with Gumbel key (seed, p+*j*). The rejection sampler's residual resample for row *j* uses the same key, so after a rejection the resample reuses the noise that picked the rejected draft token.
+  - This is harmless for a one-hot greedy draft. With the E41 probabilistic draft it breaks exactness.
+  - A synthetic test built from vLLM's own kernels measured per-slot TV of 0.012–0.037. With independent keys the TV fell to within noise.
+- **E43, the fix.** Draft keys are offset into a disjoint range. Speed-neutral: +0.9% ± 1.0 and +0.4% ± 0.4.
+- *Lesson: "any q is exact" also requires independent resample noise. Check the sampler's RNG keying, not only the q it caches. Rescore tests are weak detectors, so test the kernels synthetically.*
+
 ## Incidents and process lessons
 
 - **Container exits** during probes (rounds 20–21) led to three rules:

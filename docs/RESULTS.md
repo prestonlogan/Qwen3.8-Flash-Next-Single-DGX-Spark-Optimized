@@ -136,17 +136,31 @@ Direct sampled measurements of the E41 stack on PROSE2 at T1.0/p0.95/k20: **48.2
 The tok/s deltas include acceptance noise (PROSE3 tok/step differed by +1.2% between arms); the ms/step delta is the
 reliable effect (≈+1.9% at constant tok/step). Greedy requests are not affected by E42.
 
-### Current promoted numbers (E42)
+### CK42 — current-state checkpoint of the full E42 stack (one process, live-toggle controls)
 
-| Workload | Sampling | tok/s | Type |
-|---|---|---|---|
-| PROSE (6 prompts) | greedy | 55.59 | direct A/B arm (E40; greedy path unchanged by E41/E42) |
-| PROSE2 | greedy | 54.37 | promoted confirmed (E41 A/B, greedy arm) |
-| PROSE2 | T1.0 / p0.95 / k20 | 49.07 (48.96 ms/step) | direct A/B arm |
-| PROSE3 | T0.7 / p0.95 / k20 | 48.86 (48.82 ms/step) | direct A/B arm |
-| PROSE2 (clean checkout via `./run.sh`) | greedy | 53.86 (2.363 tok/step, 43.80 ms/step), n=12 | clean-copy smoke, single pass, not an A/B |
-| PROSE3 (clean checkout via `./run.sh`) | T1.0 / p0.95 / k20 | 48.15 (2.347 tok/step, 48.66 ms/step), n=8 | clean-copy smoke, single pass, not an A/B |
-| anchor | greedy | 68.85 (3.015 tok/step) | single-run preliminary (E40 launch) |
+| Measurement | Control → current | tok/step | ms/step | n | Type |
+|---|---|---|---|---|---|
+| PROSE2 greedy | base drafter 51.19 → **53.73** (+4.99% ± 0.61, 12/12) | 2.284 → 2.399 | 44.57 → 44.61 | 24/arm | direct matched A/B |
+| PROSE ordinary-5 greedy (E01 set) | E01 36.66 → **53.23** (+45.2%) | 2.387 | 44.80 | 10 | current direct; E01 is a separate launch |
+| PROSE2 T1.0/p0.95/k20 | E40 state 43.69 → **48.57** (+11.2% ± 1.2, 12/12) | 2.174 → 2.387 | 49.68 → 49.11 | 24/arm | direct matched A/B |
+| PROSE3 T1.0/p0.95/k20 (fresh) | E40 state 42.48 → **47.83** (+12.7% ± 1.1, 8/8) | 2.111 → 2.349 | 49.64 → 49.05 | 16/arm | direct matched A/B |
+| Code greedy / T1.0 | 78.00 / 68.34 | 3.555 / 3.418 | 45.53 / 49.97 | 4 | current direct |
+| JSON greedy / T1.0 | 79.21 / 71.22 | 3.651 / 3.614 | 46.06 / 50.66 | 2 | current direct |
+| S=2 PROSE greedy / T1.0 | 78.68 / 72.78 aggregate (41.94 / 38.87 per stream) | 2.507 / 2.489 | 60.08 / 64.32 | 6 waves | current direct |
+| 150k context greedy / T1.0 | 46.84, 50.94 / 47.57, 47.03 | 2.14–2.30 / 2.36–2.38 | | 2 each | current direct |
+
+### E43 — draft-noise exactness fix, E42 (coupled) vs E43 (independent), CK1
+
+| Set (T1.0/p0.95/k20) | greedy-draft ref | E42 coupled | E43 indep | E43 vs E42 |
+|---|---|---|---|---|
+| PROSE2 (n=24/arm) | 44.85 | 48.39 | **48.86** | +0.94% ± 1.00 |
+| PROSE3 fresh (n=16/arm) | 43.66 | 47.60 | **47.77** | +0.41% ± 0.42 |
+
+Rescored mean target log-prob per token (greedy-draft ref minus arm, paired per prompt):
+- PROSE2: E42 coupled +0.015 ± 0.010; E43 +0.009 ± 0.017.
+- PROSE3: E42 coupled +0.016 ± 0.018; E43 −0.016 ± 0.020.
+- CK42's E42-vs-E40 comparison was −0.031 ± 0.013.
+- The served rescore is a weak test. The decisive evidence is the synthetic kernel test (E43 within noise; coupled TV 0.012–0.037 per slot).
 
 ## 4. Step anatomy
 
