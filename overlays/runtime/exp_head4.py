@@ -1,5 +1,3 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2026 Preston Logan. Part of Qwen3.8-Flash-Next-Single-DGX-Spark-Optimized (builds on MiaAI-Lab's recipe).
 """EXPERIMENT: INT4 (sym, group-32, fp16 scale) coarse copy of the full target lm_head for
 candidate selection only; exact BF16 logits are recomputed for the top-C candidates."""
 import torch

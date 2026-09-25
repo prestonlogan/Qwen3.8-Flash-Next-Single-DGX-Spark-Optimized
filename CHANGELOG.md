@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.0 — 2026-09-25 — optional S6H sampled fast head (opt-in, default OFF)
+- `Q38_S6=1` (requires HX): for plain sampled batches with T∈[0.7,1.0], top_k=20, top_p=0.95 (no min_p, penalties, bias, logprobs, grammar or thinking budget), the target head scores with INT4-g32. Only the top-1024 union rows are then refined with the E46 HX kernel. Outside that gate, the E46 head is used.
+- Fidelity (high-fidelity, **not exact**):
+  - Refined logits are bit-identical to E46's head on the shortlist.
+  - Processed distribution equal to E46 on 4,098 hard rows (multilingual, code, JSON, tools, reasoning).
+  - 0 true-top-20 shortlist misses on those rows and on 4,098 disjoint hard rows (worst rank 107 and 57 of 1024).
+  - Exactness still depends on the empirical shortlist coverage; it is not certified.
+- Speed: sampled PROSE2 T1.0 ms/step −1.88 ± 0.08 (12/12 prompts, interleaved on/off); tok/s 52.34 → 54.40 (+3.9%). Rapid PROSE3 screen −1.63 ms (6/6). +0.36 GB.
+
 ## v0.5.0 — 2026-09-25 — E46 (sampled decode: high-fidelity compressed head)
 
 - **High-fidelity target head for sampled requests** (default chat T1.0 / p.95; greedy already uses the E39 fast head).

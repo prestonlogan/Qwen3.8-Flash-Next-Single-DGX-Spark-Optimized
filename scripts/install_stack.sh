@@ -31,4 +31,5 @@ echo on > $O/topkp.txt;          run exec_topkp.py             # E42 small-batch
 if [[ "${Q38_QF:-1}" == 1 ]]; then echo on > $O/qfmoe.txt; run exec_qfmoe_install.py; fi  # E45 SSHdotCodes NVFP4 decode MoE for 1..8-row verify/draft target graphs (Q38_QF=0 -> CUTLASS)
 if [[ "${Q38_HX:-1}" == 1 ]]; then echo on > $O/hx.txt; run exec_hx.py; fi       # E46 high-fidelity sampled head: exponent-coded BF16 (lossless weight storage; logits not bit-identical, +0.97 GB; Q38_HX=0 -> cuBLAS BF16)
 if [[ "${Q38_FREE:-1}" == 1 ]]; then run exec_free.py; fi                          # E46 free install-only INT4 head copies
+if [[ "${Q38_S6:-0}" == 1 && "${Q38_HX:-1}" == 1 ]]; then echo on > $O/s6.txt; run exec_s6.py; fi  # v0.6 OPT-IN S6H sampled fast head (INT4 top-1024 + HX-row refine; high-fidelity, not exact; +0.36 GB)
 echo "INSTALL_OK"
