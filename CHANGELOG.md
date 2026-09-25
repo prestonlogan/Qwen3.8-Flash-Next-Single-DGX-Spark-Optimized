@@ -9,7 +9,7 @@
 - **Measured (same process, sampled):** ms/step −1.42 ± 0.22 (PROSE2, 12/12 prompts) and −1.58 ± 0.37 (PROSE3, 8/8), i.e. ≈ −3%. Greedy unchanged.
 - **Memory:** install-only INT4 head copies are now freed, so the net is ≈ +0.5 GB vs E45. Idle MemAvailable on a fresh boot is 14.0 GB.
 - `Q38_HX=0` restores the cuBLAS BF16 exact head; `Q38_FREE=0` keeps the INT4 copies.
-- Pending: a warmed dual 150k+150k memory check on E46.
+- **Concurrency verified:** warmed dual 150k+150k runs at ≈40.2 tok/s per stream (≈80.5 aggregate, greedy), single warm 150k at 52.1 tok/s; minimum host MemAvailable 13.3 GB.
 
 ## v0.4.0 — 2026-09-25 — E45 (decode: faster NVFP4 routed-expert kernel)
 

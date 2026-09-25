@@ -18,7 +18,7 @@ was developed and measured one experiment at a time; every retained item is eith
 | Image | `vllm/vllm-openai@sha256:fc120ece0a388cc0aa1caad4a9f1cd92113484ab7ec2fd0efadd62585be05bf8` |
 | Engine | day-0 Qwen3.8 vLLM fork build `0.1.dev20073+g8e685d198`, FlashInfer 0.6.17, torch 2.13.0+cu130 |
 | Serving profile | TP=1, 262,144 context, FP8 KV cache, MTP speculative decoding (3 draft tokens), `max-num-seqs` 4 |
-| Promoted stack | **E46** (candidate; E45 + lossless compressed exact head for sampled requests) — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
+| Promoted stack | **E46** (E45 + lossless compressed exact head for sampled requests) — see [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) |
 
 ## Why this exists
 
