@@ -9,6 +9,7 @@
 # Environment (all optional):
 #   Q38_NAME        container name            (default q38fn-opt)
 #   Q38_PORT        port                      (default 5810)
+#   Q38_HOST        bind address              (default 127.0.0.1; the dev-mode RPC endpoint executes code — never expose it)
 #   Q38_IMAGE       image                     (default vllm/vllm-openai@sha256:fc120ece...)
 #   Q38_HF_HOME     host HF cache             (default $HOME/.cache/huggingface)
 #   Q38_PLE_CACHE   host packed-PLE dir root  (default $HOME/.cache/vllm/ple_cache)
@@ -103,7 +104,7 @@ docker run -d --name $NAME \
   --speculative-config "$SPEC" \
   --compilation-config "$COMP" \
   --worker-extension-cls exp_q38_ext.ExpWorkerExt \
-  --host 0.0.0.0 --port $PORT >/dev/null
+  --host ${Q38_HOST:-127.0.0.1} --port $PORT >/dev/null
 
 # experiment-owned watchdog (frozen copy of production memwatch.sh, logs into the experiment dir)
 MEMWATCH_LOG=$LOG-memwatch.log MEMWATCH_ARCHIVE_DIR=$EXP/logs/archive \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Preston Logan. Part of Qwen3.8-Flash-Next-Single-DGX-Spark-Optimized (builds on MiaAI-Lab's recipe).
-# install_stack.sh — hot-install the promoted optimization stack (E43) into a running server started by serve.sh.
+# install_stack.sh — hot-install the promoted optimization stack (E46; S6FX only with Q38_S6=1) into a running server started by serve.sh.
 # Each step runs one overlays/runtime/exec_*.py inside the vLLM worker via collective_rpc (VLLM_SERVER_DEV_MODE).
 # Control files (<name>.txt) are written next to the exec scripts; they are git-ignored runtime state.
 # Order matters (later steps assume earlier ones). Total ~10-20 s. See docs/OPTIMIZATIONS.md for each item.
