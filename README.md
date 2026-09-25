@@ -50,7 +50,7 @@ hard case for speculative decoding. Each number is labelled with how it was meas
 | Ordinary prose, 2 concurrent streams (S=2) | greedy / T1.0 | 78.68 / 72.78 tok/s aggregate (41.9 / 38.9 per stream) | current stack, direct (CK42) |
 | 150k-token context decode | greedy / T1.0 | 46.8–50.9 / 47.0–47.6 tok/s | current stack, direct (CK42, 2 runs each) |
 | **Warm multi-turn TTFT** (responsiveness, not decode), ~8.4k-token conversation | greedy | second turn 1.24 → **0.68 s**; after a ~3k-word tool result 3.51 → **2.65 s**; cold first turn unchanged (5.2 s) | direct matched A/B, E43 vs E44 (6 paired sessions) |
-| **E45 vs E44** (NVFP4 decode MoE kernel) | greedy / default chat T1.0 | PROSE3 greedy 53.08 → **55.17** (+4.0% ± 0.6, 8/8); PROSE3 T1.0 48.21 → **49.50** (+2.8% ± 1.3); PROSE2 T1.0 49.01 → **50.72** (+3.6% ± 1.0); 150k greedy 49.0 → 53.0 (n=2); tok/step unchanged | direct matched A/B, same process (QF1/QF3) |
+| **E45 vs E44** (NVFP4 decode MoE kernel) | greedy / default chat T1.0 | PROSE3 greedy 53.08 → **55.17** (+4.0% ± 0.6, 8/8); PROSE3 T1.0 48.21 → **49.50** (+2.8% ± 1.3); PROSE2 T1.0 49.01 → **50.72** (+3.6% ± 1.0); 150k greedy ≈+6–8% preliminary (n=2 per arm, cold/warm imbalance); tok/step unchanged | direct matched A/B, same process (QF1/QF3) |
 | Clean-checkout smoke of E42 via `./run.sh` | PROSE2 greedy / PROSE3 T1.0 | 53.86 / 48.15 tok/s | clean-copy smoke, single pass, not an A/B |
 
 Notes that matter when reading the table:

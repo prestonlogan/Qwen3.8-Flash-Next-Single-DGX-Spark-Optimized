@@ -7,7 +7,7 @@
   - Two-line header change only (c10 stream headers). See `THIRD_PARTY.md`.
   - Other shapes fall back to FlashInfer CUTLASS. `Q38_QF=0` restores E44.
 - **Measured:** routed MoE ≈203 → 231–245 GB/s; verify graph 38.5 → 37.0 ms.
-  - Speed: PROSE3 greedy +4.0%, default-chat T1.0 +2.8–3.6%, 150k greedy ≈+7% (n=2).
+  - Speed: PROSE3 greedy +4.0%, default-chat T1.0 +2.8–3.6%, 150k greedy ≈+6–8% preliminary (n=2 per arm, cold/warm imbalance).
   - Quality: PPL 2.378 → 2.382 (noise band 2.37–2.40); tool, JSON, reasoning and code gates pass; logprob divergence within same-arm noise.
   - Not bitwise identical to CUTLASS (different summation order).
 
