@@ -1,0 +1,14 @@
+.env
+.state/
+.stage/
+.stage_ref_/
+adapters/**/*.safetensors
+overlays/runtime/*.txt
+!overlays/runtime/dv_cur_u48k.txt
+overlays/runtime/*.so
+__pycache__/
+*.pyc
+results/
+*.log
+*.nsys-rep
+*.qdrep
