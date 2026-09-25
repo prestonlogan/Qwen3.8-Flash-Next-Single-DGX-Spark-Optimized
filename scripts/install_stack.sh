@@ -29,4 +29,6 @@ echo "on 512" > $O/head_gate.txt; run exec_head_gate.py         # E39 fast targe
 echo "on 20 0.9 0.9 indep" > $O/probdraft.txt; run exec_probdraft.py  # E41 probabilistic fast-head draft + E43 independent draft noise keys (exact)
 echo on > $O/topkp.txt;          run exec_topkp.py             # E42 small-batch top-k/top-p fast path (bit-identical to stock incl. tie order)
 if [[ "${Q38_QF:-1}" == 1 ]]; then echo on > $O/qfmoe.txt; run exec_qfmoe_install.py; fi  # E45 SSHdotCodes NVFP4 decode MoE for 1..8-row verify/draft target graphs (Q38_QF=0 -> CUTLASS)
+if [[ "${Q38_HX:-1}" == 1 ]]; then echo on > $O/hx.txt; run exec_hx.py; fi       # E46 exact sampled head via lossless exponent-coded BF16 (bit-exact weights, +0.97 GB; Q38_HX=0 -> cuBLAS BF16)
+if [[ "${Q38_FREE:-1}" == 1 ]]; then run exec_free.py; fi                          # E46 free install-only INT4 head copies
 echo "INSTALL_OK"

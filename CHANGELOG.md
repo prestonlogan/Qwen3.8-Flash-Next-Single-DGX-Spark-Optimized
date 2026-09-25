@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.0 — 2026-09-25 — E46 (sampled decode: lossless compressed exact head)
+
+- **Exact target head for sampled requests** (default chat T1.0 / p.95; greedy already uses the E39 fast head).
+  - The BF16 lm_head is stored losslessly: a sign+mantissa byte, a 4-bit exponent offset from the per-64 group maximum, and a sparse fp32 add-back for the 0.01% escapes. That is 0.96 GB instead of 1.27 GB; weights reconstruct bit-exactly.
+  - A Triton GEMV reads the compressed form: 5.47 → 4.04 ms at M=4.
+  - Logits: 99.98% bitwise-equal to cuBLAS, the rest within 1 bf16 ulp (accumulation order only); TV ≤ 2.4e-6 at T1.0.
+- **Measured (same process, sampled):** ms/step −1.42 ± 0.22 (PROSE2, 12/12 prompts) and −1.58 ± 0.37 (PROSE3, 8/8), i.e. ≈ −3%. Greedy unchanged.
+- **Memory:** install-only INT4 head copies are now freed, so the net is ≈ +0.5 GB vs E45. Idle MemAvailable on a fresh boot is 14.0 GB.
+- `Q38_HX=0` restores the cuBLAS BF16 exact head; `Q38_FREE=0` keeps the INT4 copies.
+- Pending: a warmed dual 150k+150k memory check on E46.
+
 ## v0.4.0 — 2026-09-25 — E45 (decode: faster NVFP4 routed-expert kernel)
 
 - **Decode MoE kernel.** The routed experts of the 1–8-row verify/draft target graphs use SSHdotCodes' `qf_moe.cu` ([qwen-3.8-flash-next-pro6000](https://github.com/SSHdotCodes/qwen-3.8-flash-next-pro6000) @ `8e5be44`, Apache-2.0).

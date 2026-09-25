@@ -307,3 +307,7 @@ deliberately **not** enabled: the S6 fast target head for sampled requests (see 
   - gemm2: one CTA per (expert, 128 rows) with a deterministic top-k-order reduce. Chained with PDL.
 - Why it is faster: CUTLASS grouped GEMM at M ≤ 4 wastes tile work and needs prep/finalize kernels, whereas this kernel streams the weights at ~245 GB/s.
 - Built by `scripts/prepare.sh` (≈25 s) into `overlays/runtime/qf/build/`.
+
+
+## 19. E46 — lossless exponent-coded exact head (sampled path)
+The exact BF16 lm_head (248320×2560) is used for every non-greedy request. BF16 exponents in this head have ≈2.6 bits of entropy, so each weight is stored as a sign+mantissa byte plus a 4-bit offset from its 64-group's maximum exponent. Offsets ≥15 (0.01%) are escapes: they are zeroed in the dense code and added back from a sparse fp32 list. A Triton GEMV (BN=32, BK=256) reconstructs the exact bf16 bits in registers and uses `tl.dot` with fp32 accumulation. Bytes read: 1.27 → 0.96 GB per sampled step; served ms/step ≈ −1.5 (−3%). Files: `overlays/runtime/exp_hx.py`, `exec_hx.py`, `exec_free.py`.
