@@ -3,7 +3,8 @@
 # prepare.sh — one-time host-side preparation (no model download):
 #   1. build the packed PLE table (~27 GiB under $Q38_PLE_CACHE) with MiaAI-Lab's builder, if missing;
 #   2. compile the 1-line ARM memory-barrier helper used by the PLE zero-copy path (overlays/runtime/exp_dmb.c);
-#   3. build the r32a MTP drafter patch from the committed LoRA (scripts/build_adapter.sh), if missing.
+#   3. build the r32a MTP drafter patch from the committed LoRA (scripts/build_adapter.sh), if missing;
+#   4. generate the E44 prefix-cache block-drop backport (MiaAI-Lab PR #71 = vllm#53388) from the image's own files.
 set -euo pipefail
 . "$(dirname "$0")/common.sh"
 [[ -f $SNAPDIR/model.safetensors.index.json ]] || die "checkpoint not found at $SNAPDIR — run ./download.sh first"
@@ -30,4 +31,14 @@ else
   if command -v gcc >/dev/null; then gcc -O2 -shared -fPIC -o "$SO" "$REPO/overlays/runtime/exp_dmb.c"
   else docker run --rm --network none -u "$(id -u):$(id -g)" -v "$REPO/overlays/runtime:/w" --entrypoint gcc "$IMAGE" -O2 -shared -fPIC -o /w/exp_dmb.so /w/exp_dmb.c; fi
   ok "compiled exp_dmb.so"
+fi
+BD=$REPO/overlays/block_drop
+if [[ -f $BD/out/config/speculative.py ]] && grep -q disable_eagle_block_drop "$BD/out/config/speculative.py"; then ok "block-drop backport present"
+elif [[ "${Q38_DRY_RUN:-0}" == 1 ]]; then info "DRY RUN: would generate overlays/block_drop/out from the image (MiaAI-Lab PR #71)"
+else
+  docker run --rm --network none -u "$(id -u):$(id -g)" -v "$BD:/w" --entrypoint bash "$IMAGE" -c '
+    set -e; P=/usr/local/lib/python3.12/dist-packages/vllm; cd /w
+    for f in $(python3 patch_block_drop.py --list); do mkdir -p orig/$(dirname $f); cp $P/$f orig/$f; done
+    python3 patch_block_drop.py /w/orig /w/out'
+  ok "generated block-drop backport (6 files)"
 fi

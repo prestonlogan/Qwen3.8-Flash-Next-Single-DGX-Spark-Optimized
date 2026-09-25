@@ -284,3 +284,18 @@ objects created by earlier ones, so the order matters.
 
 Neutral or rejected items are in [RESEARCH_LOG.md](RESEARCH_LOG.md). One approximate item was measured and is
 deliberately **not** enabled: the S6 fast target head for sampled requests (see [DECISIONS.md](DECISIONS.md)).
+
+---
+
+### 17. Keep the trailing prefix-cache block (E44) — responsiveness only, from MiaAI-Lab PR #71
+
+- **Problem.** With EAGLE-family drafters (MTP included), the pinned vLLM makes every prefix-cache hit stop one scheduler block early, and makes the scheduler back its last cacheable position off one block. The hybrid Mamba page forces a 1,664-token attention block on this model, so every warm turn recomputes about 1.7k tokens.
+- **Change.** vllm#53388 adds the opt-in `disable_eagle_block_drop`. MiaAI-Lab's backport ([PR #71](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark/pull/71), commit `ffc41629`, author usmaneth) patches 6 files of the pinned image and is used unmodified. Target verification is unchanged.
+- **Effect** (paired, 6 sessions, ~8.4k context):
+  - warm-turn TTFT 1.24 → 0.68 s;
+  - after a tool result, 3.51 → 2.65 s;
+  - cold unchanged;
+  - hits 6,656 → 8,320 tokens;
+  - decode unchanged.
+- **Class.** Output-exact in the same sense as the existing prefix cache: warm-vs-cold top-20 logprob divergence equals E43's own warm-vs-cold divergence.
+

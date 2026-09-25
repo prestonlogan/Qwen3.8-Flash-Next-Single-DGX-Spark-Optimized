@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.3.0 — 2026-09-25 — E44 (responsiveness / TTFT; decode tok/s unchanged)
+
+- **Keep the trailing prefix-cache block.** With MTP, the pinned vLLM drops the last scheduler block from every prefix-cache hit. On this hybrid model that block is 1,664 tokens, so each warm turn re-prefills about 1.7k tokens that are already cached.
+  - `overlays/block_drop/patch_block_drop.py` is MiaAI-Lab's backport of vllm#53388: [PR #71](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark/pull/71), commit `ffc41629`, author usmaneth, merged via PR #72. It's copied unmodified.
+  - `scripts/prepare.sh` generates the 6 patched files from the image. `serve.sh` mounts them and sets `disable_eagle_block_drop`. `Q38_BLOCK_DROP=1` restores stock behaviour.
+- **Paired test:** 6 sessions, about 8.4k tokens of context; E43 vs E44, same conversation tokens.
+  - Warm second turn TTFT: **1.24 → 0.68 s**.
+  - Turn after a ~3k-word tool result: **3.51 → 2.65 s**.
+  - Cold first turn: 5.21 → 5.18 s (unchanged).
+  - Prefix-cache hits per warm turn: 6,656 → 8,320 of 8,409 prompt tokens.
+  - Decode tok/s and tok/step unchanged.
+  - Warm-vs-cold top-20 logprob divergence is the same as the E43 baseline (+0.032 vs +0.036 TV above repeat noise).
+
 ## v0.2.0 — 2026-09-25 — E43
 
 - **Exactness fix for sampled requests.** The E41 probabilistic draft sampled its tokens with the Gumbel noise key that the pinned vLLM V2 rejection sampler later reuses for the residual resample of the same row. That coupling biases sampled outputs.

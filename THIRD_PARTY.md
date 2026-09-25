@@ -17,3 +17,5 @@
 - The packed PLE table (~27 GiB). It is generated locally by `scripts/prepare.sh`.
 
 The Docker image `vllm/vllm-openai` (pinned by digest) and its contents are used as-is under their own licenses.
+
+- `overlays/block_drop/patch_block_drop.py` — copied unmodified from MiaAI-Lab/Qwen3.8-Flash-Next-Single-DGX-Spark `files/patch_block_drop.py` (PR #71, commit ffc41629c0a9aa9a390f18fecd6f1f19e7c3b024, author usmaneth), AGPL-3.0. It backports vllm-project/vllm#53388 (Apache-2.0).

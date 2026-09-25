@@ -16,6 +16,7 @@
 #   Q38_GMU / Q38_MAX_NUM_SEQS / Q38_MAX_MODEL_LEN   (defaults 0.786 / 4 / 262144)
 #   Q38_NO_ADAPTER=1  serve the stock MTP drafter (skip the r32a patch)
 #   Q38_NO_INSTALL=1  launch only; do not hot-install the optimization stack
+#   Q38_BLOCK_DROP=1  stock trailing prefix-cache block drop (disable the E44 backport)
 set -euo pipefail
 . "$(dirname "$0")/common.sh"      # loads .env and shared defaults (MODEL_REVISION, IMAGE, HFH, PLEC, PORT, NAME, PATCH)
 O=$REPO/files; RT=$REPO/overlays/runtime
@@ -23,6 +24,14 @@ PKG=/usr/local/lib/python3.12/dist-packages
 TAG=${Q38_TAG:-opt}
 EXP=${Q38_STATE:-$REPO/.state}
 SPEC='{"method":"mtp","num_speculative_tokens":3,"use_local_argmax_reduction":true}'
+# E44: keep the trailing prefix-cache block (MiaAI-Lab PR #71, backport of vllm#53388; TTFT only, decode unchanged)
+BD_MOUNTS=""
+if [[ "${Q38_BLOCK_DROP:-0}" != 1 ]]; then
+  BD=$REPO/overlays/block_drop/out
+  [[ -f $BD/config/speculative.py ]] || { echo "missing $BD — run scripts/prepare.sh (or set Q38_BLOCK_DROP=1)" >&2; exit 2; }
+  for f in $(cd "$BD" && find . -name '*.py' | sed 's|^./||'); do BD_MOUNTS="$BD_MOUNTS -v $BD/$f:$PKG/vllm/$f:ro"; done
+  SPEC='{"method":"mtp","num_speculative_tokens":3,"use_local_argmax_reduction":true,"disable_eagle_block_drop":true}'
+fi
 COMP='{"mode":0,"cudagraph_mode":"FULL_DECODE_ONLY","cudagraph_capture_sizes":[4,8,12,16]}'
 MNS=${Q38_MAX_NUM_SEQS:-4}
 GMU=${Q38_GMU:-0.786}
@@ -75,7 +84,7 @@ docker run -d --name $NAME \
   -v $HFH:/root/.cache/huggingface:ro \
   -v $EXP/cache/vllm:/root/.cache/vllm \
   -v $PLEC:/root/.cache/vllm/ple_cache:ro \
-  -v $RT:/exp:ro -v $REPO:/q38:ro -v $RT/exp_q38_ext.py:$PKG/exp_q38_ext.py:ro \
+  -v $RT:/exp:ro -v $REPO:/q38:ro -v $RT/exp_q38_ext.py:$PKG/exp_q38_ext.py:ro $BD_MOUNTS \
   -e VLLM_USE_V2_MODEL_RUNNER=1 \
   -e VLLM_SERVER_DEV_MODE=1 -e EXP_MTP_DRAFT_HEAD_FP8=1 $MTP_PATCH_ENV \
   "$IMAGE" \
